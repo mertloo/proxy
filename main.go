@@ -38,7 +38,6 @@ func main() {
 		NextServer: *nextserver,
 		CryptMeth:  *cryptmeth,
 		Password:   *password,
-		Debug:      false,
 	}
 	srv, err := NewServer(cfg)
 	if err != nil {

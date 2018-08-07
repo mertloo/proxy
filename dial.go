@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"time"
 )
 
@@ -50,34 +49,20 @@ func (sd *ssocksDialer) dial(addr string) (conn net.Conn, err error) {
 		return
 	}
 	c.Write(iv)
-	cipher, err := info.newFunc(iv, sd.password)
+	cipher, err := info.newCipherFunc(iv, sd.password)
 	if err != nil {
 		return
 	}
-	cc := newCipherConn(cipher, c)
-	if err != nil {
-		return
-	}
-	c = cc
+	c = newCipherConn(cipher, c)
 	buf := make([]byte, 259)
-	buf[0] = 0x03
-	host, port, err := net.SplitHostPort(addr)
+	n, err := formatAddr(buf, addr)
 	if err != nil {
 		return
 	}
-	alen := byte(len(host))
-	buf[1] = alen
-	copy(buf[2:2+alen], host)
-	portn, err := strconv.Atoi(port)
-	if err != nil {
-		return
-	}
-	buf[2+alen] = byte(uint16(portn) >> 8)
-	buf[3+alen] = byte(portn)
-	c.Write(buf[:4+alen])
-	c.Read(buf[:1])
-	if buf[0] != 0x01 {
-		err = fmt.Errorf("conn remote failed")
+	c.Write(buf[:n])
+	n, err = c.Read(buf[:1])
+	if n != 1 || buf[0] != 0x01 {
+		err = fmt.Errorf("dial remote failed (n, buf, err: %v, %v, %v)", n, buf[:n], err)
 		return
 	}
 	conn = c

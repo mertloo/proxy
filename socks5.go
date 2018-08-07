@@ -26,12 +26,13 @@ type socks5 struct {
 	server     *server
 }
 
-func newSocks5(conn net.Conn, srv *server) proxy {
-	s := new(socks5)
-	s.timeout = 2 * time.Second
-	s.upStream = newTimeoutConn(conn, s.timeout)
-	s.server = srv
-	return s
+func newSocks5(conn net.Conn, srv *server) (s *socks5) {
+	s = &socks5{
+		timeout:  defaultTimeout,
+		upStream: newTimeoutConn(conn, defaultTimeout),
+		server:   srv,
+	}
+	return
 }
 
 func (s *socks5) setUpstream() error {
@@ -65,26 +66,16 @@ func (s *socks5) handshake() error {
 	return err
 }
 
-func (s *socks5) connect() (net.Conn, error) {
+func (s *socks5) connect() (c net.Conn, err error) {
 	buf := make([]byte, 259)
 	n, _ := s.upStream.Read(buf)
-	if n == 0 {
-		return nil, connReqErr
-	}
 	m := len(connReq)
-	if !bytes.Equal(buf[:m], connReq) {
+	if n < m || !bytes.Equal(buf[:m], connReq) {
 		return nil, connReqErr
 	}
-	atyp := buf[m]
-	var addr string
-	switch atyp {
-	case 0x03:
-		alen := buf[m+1]
-		buf = buf[m+2:]
-		host, port := buf[:alen], uint16(buf[alen])<<8|uint16(buf[alen+1])
-		addr = fmt.Sprintf("%s:%d", host, port)
-	default:
-		return nil, notSupportErr
+	addr, err := parseAddr(buf[m:n])
+	if err != nil {
+		return nil, err
 	}
 	conn, err := s.server.dial(addr)
 	if err != nil {
