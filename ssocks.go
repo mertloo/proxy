@@ -148,11 +148,21 @@ func (s *ssocks) close() error {
 }
 
 func (s *ssocks) readAddr() (addr string, err error) {
-	buf := make([]byte, 259)
+	buf := make([]byte, 2)
 	n, err := s.upStream.Read(buf)
-	if n == 0 || (err != nil && err != io.EOF) {
+	if n != 2 || (err != nil && err != io.EOF) || buf[0] != 0x03 {
 		err = fmt.Errorf("read addr err buf, err: %v, %v", buf[:n], err)
 		return
 	}
-	return parseAddr(buf[:n])
+	hlen := int(buf[1])
+	buf = make([]byte, 2+hlen)
+	n, err = s.upStream.Read(buf)
+	if n != 2+hlen || (err != nil && err != io.EOF) {
+		err = fmt.Errorf("read addr err buf, err: %v, %v", buf[:n], err)
+		return
+	}
+	host := buf[:hlen]
+	port := uint16(buf[hlen])<<8 | uint16(buf[hlen+1])
+	addr = fmt.Sprintf("%s:%d", host, port)
+	return
 }
