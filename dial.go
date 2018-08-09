@@ -2,7 +2,7 @@ package main
 
 import (
 	"crypto/rand"
-	"fmt"
+	//"fmt"
 	"io"
 	"net"
 	"time"
@@ -53,18 +53,23 @@ func (sd *ssocksDialer) dial(addr string) (conn net.Conn, err error) {
 	if err != nil {
 		return
 	}
-	c = newCipherConn(cipher, c)
+	c = &encstreamConn{c, cipher}
+	//c = newCipherConn(cipher, c)
 	buf := make([]byte, 259)
 	n, err := formatAddr(buf, addr)
 	if err != nil {
 		return
 	}
 	c.Write(buf[:n])
-	n, err = c.Read(buf[:1])
-	if n != 1 || buf[0] != 0x01 {
-		err = fmt.Errorf("dial remote failed (n, buf, err: %v, %v, %v)", n, buf[:n], err)
+	cd, err := newDecstream(sd.cryptMeth, sd.password, c)
+	if err != nil {
 		return
 	}
-	conn = c
+	//n, err = c.Read(buf[:1])
+	//if n != 1 || buf[0] != 0x01 {
+	//	err = fmt.Errorf("dial remote failed (n, buf, err: %v, %v, %v)", n, buf[:n], err)
+	//	return
+	//}
+	conn = cd
 	return
 }

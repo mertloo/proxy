@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"fmt"
 	"io"
 	"net"
@@ -23,16 +24,77 @@ func newSSocks(conn net.Conn, srv *server) (s *ssocks) {
 	return
 }
 
+// FIXME --
+type decstreamConn struct {
+	net.Conn
+	*Cipher
+}
+
+func (dc *decstreamConn) Read(buf []byte) (int, error) {
+	n, err := dc.Conn.Read(buf)
+	if n != 0 {
+		dc.Decrypt(buf[:n], buf[:n])
+	}
+	return n, err
+}
+
+type encstreamConn struct {
+	net.Conn
+	*Cipher
+}
+
+func (ec *encstreamConn) Write(buf []byte) (int, error) {
+	tmp := make([]byte, len(buf))
+	ec.Encrypt(tmp, buf)
+	n, err := ec.Conn.Write(tmp)
+	return n, err
+}
+
+func newDecstream(cryptMeth, password string, conn net.Conn) (net.Conn, error) {
+	info, err := getCryptInfo(cryptMeth)
+	if err != nil {
+		return conn, err
+	}
+	buf := make([]byte, info.ivLen)
+	n, err := conn.Read(buf)
+	if n != info.ivLen || (err != nil && err != io.EOF) {
+		err = fmt.Errorf("read iv err", buf[:n], err)
+		return conn, err
+	}
+	cipher, err := info.newCipherFunc(buf, password)
+	if err != nil {
+		return conn, err
+	}
+	return &decstreamConn{conn, cipher}, nil
+}
+
+func newEncstream(cryptMeth, password string, conn net.Conn) (net.Conn, error) {
+	info, err := getCryptInfo(cryptMeth)
+	if err != nil {
+		return conn, err
+	}
+	buf := make([]byte, info.ivLen)
+	_, err = io.ReadFull(rand.Reader, buf)
+	if err != nil {
+		return conn, err
+	}
+	conn.Write(buf)
+	cipher, err := info.newCipherFunc(buf, password)
+	if err != nil {
+		return conn, err
+	}
+	return &encstreamConn{conn, cipher}, nil
+}
+
+// -- FIXME
+
 func (s *ssocks) setUpstream() (err error) {
-	cipher, err := newCipher(s.server.cryptMeth, s.server.password, s.upStream)
+	// read iv, init dec, read addr
+	// write iv, init enc, conn remote, write ack
+	s.upStream, err = newDecstream(s.server.cryptMeth, s.server.password, s.upStream)
 	if err != nil {
 		return
 	}
-	s.upStream = newCipherConn(cipher, s.upStream)
-	return
-}
-
-func (s *ssocks) setDownstream() (err error) {
 	addr, err := s.readAddr()
 	if err != nil {
 		return
@@ -42,7 +104,38 @@ func (s *ssocks) setDownstream() (err error) {
 		return
 	}
 	s.downStream = newTimeoutConn(conn, s.timeout)
-	s.upStream.Write([]byte{0x01})
+	s.upStream, err = newEncstream(s.server.cryptMeth, s.server.password, s.upStream)
+	if err != nil {
+		return
+	}
+	//s.upStream.Write([]byte{0x01})
+	//--
+	/*
+		cipher, err := newCipher(s.server.cryptMeth, s.server.password, s.upStream)
+		if err != nil {
+			return
+		}
+		s.upStream = newCipherConn(cipher, s.upStream)
+	*/
+	return
+}
+
+func (s *ssocks) setDownstream() (err error) {
+	/*
+		addr, err := s.readAddr()
+		fmt.Println("GOT ADDR", addr)
+		if err != nil {
+			return
+		}
+		conn, err := s.server.dial(addr)
+		if err != nil {
+			return
+		}
+		s.downStream = newTimeoutConn(conn, s.timeout)
+		fmt.Println("CONN ADDR", addr)
+		nw, err := s.upStream.Write([]byte{0x01})
+		fmt.Println("ACKED", addr, nw, err)
+	*/
 	return
 }
 
@@ -55,11 +148,21 @@ func (s *ssocks) close() error {
 }
 
 func (s *ssocks) readAddr() (addr string, err error) {
-	buf := make([]byte, 259)
+	buf := make([]byte, 2)
 	n, err := s.upStream.Read(buf)
-	if n == 0 || (err != nil && err != io.EOF) {
+	if n != 2 || (err != nil && err != io.EOF) || buf[0] != 0x03 {
 		err = fmt.Errorf("read addr err buf, err: %v, %v", buf[:n], err)
 		return
 	}
-	return parseAddr(buf[:n])
+	hlen := int(buf[1])
+	buf = make([]byte, 2+hlen)
+	n, err = s.upStream.Read(buf)
+	if n != 2+hlen || (err != nil && err != io.EOF) {
+		err = fmt.Errorf("read addr err buf, err: %v, %v", buf[:n], err)
+		return
+	}
+	host := buf[:hlen]
+	port := uint16(buf[hlen])<<8 | uint16(buf[hlen+1])
+	addr = fmt.Sprintf("%s:%d", host, port)
+	return
 }
