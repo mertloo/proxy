@@ -1,75 +1,50 @@
 package main
 
 import (
-	"crypto/rand"
-	//"fmt"
-	"io"
 	"net"
 	"time"
 )
 
-var (
-	defaultTimeout = 2 * time.Second
-	defaultDialer  = new(tcpDialer)
-)
-
-type dialer interface {
-	dial(addr string) (net.Conn, error)
+type TCPDialer struct {
+	Timeout time.Duration
 }
 
-type tcpDialer struct{}
-
-func (td *tcpDialer) dial(addr string) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, defaultTimeout)
+func (d *TCPDialer) Dial(addr string) (conn net.Conn, err error) {
+	return net.DialTimeout("tcp", addr, d.Timeout)
 }
 
-type ssocksDialer struct {
-	cryptMeth  string
-	password   string
-	serverAddr string
+type SSocksDialer struct {
+	Server     string
+	CipherName string
+	Password   string
+	Timeout    time.Duration
 }
 
-func (sd *ssocksDialer) dial(addr string) (conn net.Conn, err error) {
-	c, err := net.DialTimeout("tcp", sd.serverAddr, defaultTimeout)
+func (d *SSocksDialer) Dial(addr string) (conn net.Conn, err error) {
+	conn, err = net.DialTimeout("tcp", d.Server, d.Timeout)
 	if err != nil {
 		return
 	}
 	defer func() {
 		if err != nil {
-			c.Close()
+			conn.Close()
+			return
 		}
 	}()
-	info, err := getCryptInfo(sd.cryptMeth)
+	var ssocks SSocks
+	eConn, err := ssocks.NewEConn(conn, d.CipherName, d.Password)
 	if err != nil {
 		return
 	}
-	iv := make([]byte, info.ivLen)
-	_, err = io.ReadFull(rand.Reader, iv)
+	conn = eConn
+	err = WriteAddr(conn, addr)
 	if err != nil {
 		return
 	}
-	c.Write(iv)
-	cipher, err := info.newCipherFunc(iv, sd.password)
+	dConn, err := ssocks.NewDConn(conn, d.CipherName, d.Password)
 	if err != nil {
 		return
 	}
-	c = &encstreamConn{c, cipher}
-	//c = newCipherConn(cipher, c)
-	buf := make([]byte, 259)
-	n, err := formatAddr(buf, addr)
-	if err != nil {
-		return
-	}
-	c.Write(buf[:n])
-	cd, err := newDecstream(sd.cryptMeth, sd.password, c)
-	if err != nil {
-		return
-	}
-	//n, err = c.Read(buf[:1])
-	//if n != 1 || buf[0] != 0x01 {
-	//	err = fmt.Errorf("dial remote failed (n, buf, err: %v, %v, %v)", n, buf[:n], err)
-	//	return
-	//}
-	conn = cd
+	conn = dConn
 	return
 }

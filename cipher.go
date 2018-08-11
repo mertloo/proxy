@@ -5,21 +5,74 @@ import (
 	"crypto/cipher"
 	"crypto/md5"
 	"fmt"
-	"io"
 )
 
-func md5sum(d []byte) []byte {
-	h := md5.New()
-	h.Write(d)
-	return h.Sum(nil)
+type newCipherFunc func(key []byte) (block cipher.Block, err error)
+type newStreamFunc func(block cipher.Block, iv []byte) (stream cipher.Stream)
+
+type cipherInfo struct {
+	ivLen        int
+	keyLen       int
+	newCipher    newCipherFunc
+	newEncStream newStreamFunc
+	newDecStream newStreamFunc
 }
 
-func evpBytesToKey(password string, keyLen int) (key []byte) {
+type Encrypter interface {
+	Encrypt(dst, src []byte)
+}
+
+type Decrypter interface {
+	Decrypt(dst, src []byte)
+}
+
+type StreamEncrypter struct {
+	cipher.Stream
+}
+
+func (enc *StreamEncrypter) Encrypt(dst, src []byte) {
+	enc.XORKeyStream(dst, src)
+	return
+}
+
+type StreamDecrypter struct {
+	cipher.Stream
+}
+
+func (dec *StreamDecrypter) Decrypt(dst, src []byte) {
+	dec.XORKeyStream(dst, src)
+	return
+}
+
+func newCFBEncStream(block cipher.Block, iv []byte) (stream cipher.Stream) {
+	stream = cipher.NewCFBEncrypter(block, iv)
+	return
+}
+
+func newCFBDecStream(block cipher.Block, iv []byte) (stream cipher.Stream) {
+	stream = cipher.NewCFBDecrypter(block, iv)
+	return
+}
+
+var cipherInfoMap = map[string]*cipherInfo{
+	"aes256cfb": &cipherInfo{aes.BlockSize, 32, aes.NewCipher, cipher.NewCFBEncrypter, cipher.NewCFBDecrypter},
+}
+
+func GetCipherInfo(cipherName string) (info *cipherInfo, err error) {
+	info, ok := cipherInfoMap[cipherName]
+	if !ok {
+		err = fmt.Errorf("no support cipher %s", cipherName)
+	}
+	return
+}
+
+func EVPBytesToKey(password string, keyLen int) (key []byte) {
 	const md5Len = 16
 
 	cnt := (keyLen-1)/md5Len + 1
 	m := make([]byte, cnt*md5Len)
-	copy(m, md5sum([]byte(password)))
+	s := md5.Sum([]byte(password))
+	copy(m, s[:])
 
 	// Repeatedly call md5 until bytes generated is enough.
 	// Each call to md5 uses data: prev md5 sum + password.
@@ -29,65 +82,36 @@ func evpBytesToKey(password string, keyLen int) (key []byte) {
 		start += md5Len
 		copy(d, m[start-md5Len:start])
 		copy(d[md5Len:], password)
-		copy(m[start:], md5sum(d))
+		s = md5.Sum(d)
+		copy(m[start:], s[:])
 	}
 	return m[:keyLen]
 }
 
-type cryptInfo struct {
-	newCipherFunc func(iv []byte, password string) (*Cipher, error)
-	ivLen         int
-}
-
-var (
-	cryptMap = map[string]cryptInfo{
-		"aes256cfb": {newAES256CFB, aes.BlockSize},
-	}
-)
-
-func getCryptInfo(cryptMeth string) (info cryptInfo, err error) {
-	info, ok := cryptMap[cryptMeth]
-	if !ok {
-		err = fmt.Errorf("not support crypt meth %s", cryptMeth)
-		return
-	}
-	return
-}
-
-type Cipher struct {
-	encryptStream cipher.Stream
-	decryptStream cipher.Stream
-}
-
-func newCipher(cryptMeth, password string, ivReader io.Reader) (cipher *Cipher, err error) {
-	info, ok := cryptMap[cryptMeth]
-	if !ok {
-		return nil, fmt.Errorf("not support crypt meth %s", cryptMeth)
-	}
-	buf := make([]byte, info.ivLen)
-	n, err := ivReader.Read(buf)
-	if n == 0 || err != nil {
-		return nil, fmt.Errorf("read iv err")
-	}
-	return info.newCipherFunc(buf[:n], password)
-}
-
-func newAES256CFB(iv []byte, password string) (cf *Cipher, err error) {
-	key := evpBytesToKey(password, 32)
-	block, err := aes.NewCipher(key)
+func NewEncrypter(info *cipherInfo, key, iv []byte) (encrypter Encrypter, err error) {
+	block, err := info.newCipher(key)
 	if err != nil {
 		return
 	}
-	cf = new(Cipher)
-	cf.encryptStream = cipher.NewCFBEncrypter(block, iv)
-	cf.decryptStream = cipher.NewCFBDecrypter(block, iv)
+	if info.newEncStream == nil {
+		encrypter = block
+		return
+	}
+	stream := info.newEncStream(block, iv)
+	encrypter = &StreamEncrypter{stream}
 	return
 }
 
-func (cf *Cipher) Encrypt(dst, src []byte) {
-	cf.encryptStream.XORKeyStream(dst, src)
-}
-
-func (cf *Cipher) Decrypt(dst, src []byte) {
-	cf.decryptStream.XORKeyStream(dst, src)
+func NewDecrypter(info *cipherInfo, key, iv []byte) (decrypter Decrypter, err error) {
+	block, err := info.newCipher(key)
+	if err != nil {
+		return
+	}
+	if info.newDecStream == nil {
+		decrypter = block
+		return
+	}
+	stream := info.newDecStream(block, iv)
+	decrypter = &StreamDecrypter{stream}
+	return
 }
