@@ -44,16 +44,6 @@ func (dec *StreamDecrypter) Decrypt(dst, src []byte) {
 	return
 }
 
-func newCFBEncStream(block cipher.Block, iv []byte) (stream cipher.Stream) {
-	stream = cipher.NewCFBEncrypter(block, iv)
-	return
-}
-
-func newCFBDecStream(block cipher.Block, iv []byte) (stream cipher.Stream) {
-	stream = cipher.NewCFBDecrypter(block, iv)
-	return
-}
-
 var cipherInfoMap = map[string]*cipherInfo{
 	"aes256cfb": &cipherInfo{aes.BlockSize, 32, aes.NewCipher, cipher.NewCFBEncrypter, cipher.NewCFBDecrypter},
 }
