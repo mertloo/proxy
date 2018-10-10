@@ -36,10 +36,14 @@ func main() {
 
 	flag.Parse()
 
+	info, err := GetCipherInfo(*cipher)
+	if err != nil {
+		panic(err)
+	}
+
 	if *pprof != "" {
 		pprofRun(*pprof)
 	}
-
 	if *goro != 0 {
 		goroutineNum(*goro)
 	}
@@ -48,7 +52,7 @@ func main() {
 	var dialer Dialer
 	switch *proto {
 	case "socks5":
-		dialer = &SSocksDialer{*next, *cipher, *password, timeout}
+		dialer = &SSocksDialer{*next, *password, info, timeout}
 	case "ssocks":
 		dialer = &TCPDialer{timeout}
 	}
@@ -56,7 +60,7 @@ func main() {
 	srv := new(Server)
 	srv.Addr = *addr
 	srv.NewAgent = func(conn net.Conn) ServeAgent {
-		return NewAgent(conn, *proto, *cipher, *password, dialer, timeout)
+		return NewAgent(conn, *proto, *password, info, dialer, timeout)
 	}
 	srv.ListenAndServe()
 

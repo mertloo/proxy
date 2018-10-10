@@ -9,11 +9,7 @@ import (
 
 type SSocks struct{}
 
-func (ss *SSocks) NewDConn(conn net.Conn, cipherName, password string) (dConn *DConn, err error) {
-	info, err := GetCipherInfo(cipherName)
-	if err != nil {
-		return
-	}
+func (ss *SSocks) NewDConn(conn net.Conn, password string, info *cipherInfo) (dConn *DConn, err error) {
 	buf := make([]byte, info.ivLen)
 	n, err := conn.Read(buf)
 	if n != info.ivLen || err != nil {
@@ -29,11 +25,7 @@ func (ss *SSocks) NewDConn(conn net.Conn, cipherName, password string) (dConn *D
 	return
 }
 
-func (ss *SSocks) NewEConn(conn net.Conn, cipherName, password string) (eConn *EConn, err error) {
-	info, err := GetCipherInfo(cipherName)
-	if err != nil {
-		return
-	}
+func (ss *SSocks) NewEConn(conn net.Conn, password string, info *cipherInfo) (eConn *EConn, err error) {
 	buf := make([]byte, info.ivLen)
 	_, err = io.ReadFull(rand.Reader, buf)
 	if err != nil {
