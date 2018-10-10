@@ -45,17 +45,17 @@ func main() {
 	}
 
 	timeout := time.Duration(*timeoutN) * time.Second
+	var dialer Dialer
+	switch *proto {
+	case "socks5":
+		dialer = &SSocksDialer{*next, *cipher, *password, timeout}
+	case "ssocks":
+		dialer = &TCPDialer{timeout}
+	}
 
 	srv := new(Server)
 	srv.Addr = *addr
 	srv.NewAgent = func(conn net.Conn) ServeAgent {
-		var dialer Dialer
-		switch *proto {
-		case "socks5":
-			dialer = &SSocksDialer{*next, *cipher, *password, timeout}
-		case "ssocks":
-			dialer = &TCPDialer{timeout}
-		}
 		return NewAgent(conn, *proto, *cipher, *password, dialer, timeout)
 	}
 	srv.ListenAndServe()
