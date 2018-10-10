@@ -21,18 +21,16 @@ type Agent struct {
 	upstream   net.Conn
 	downstream net.Conn
 	proto      string
-	password   string
 	info       *cipherInfo
 	timeout    time.Duration
 	Dialer
 }
 
-func NewAgent(conn net.Conn, proto, password string, info *cipherInfo, dialer Dialer, timeout time.Duration) *Agent {
+func NewAgent(conn net.Conn, proto string, info *cipherInfo, dialer Dialer, timeout time.Duration) *Agent {
 	agent := new(Agent)
 	agent.timeout = timeout
 	agent.upstream = &timeoutConn{conn, agent.timeout}
 	agent.proto = proto
-	agent.password = password
 	agent.info = info
 	agent.Dialer = dialer
 	return agent
@@ -115,7 +113,7 @@ func (agent *Agent) socks5Handshake() (err error) {
 
 func (agent *Agent) ssocksHandshake() (err error) {
 	var ssocks SSocks
-	dConn, err := ssocks.NewDConn(agent.upstream, agent.password, agent.info)
+	dConn, err := ssocks.NewDConn(agent.upstream, agent.info)
 	if err != nil {
 		return
 	}
@@ -127,7 +125,7 @@ func (agent *Agent) ssocksHandshake() (err error) {
 	}
 	agent.downstream = &timeoutConn{conn, agent.timeout}
 
-	eConn, err := ssocks.NewEConn(agent.upstream, agent.password, agent.info)
+	eConn, err := ssocks.NewEConn(agent.upstream, agent.info)
 	if err != nil {
 		return
 	}

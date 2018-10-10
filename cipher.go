@@ -13,6 +13,7 @@ type newStreamFunc func(block cipher.Block, iv []byte) (stream cipher.Stream)
 type cipherInfo struct {
 	ivLen        int
 	keyLen       int
+	key          []byte
 	newCipher    newCipherFunc
 	newEncStream newStreamFunc
 	newDecStream newStreamFunc
@@ -45,18 +46,19 @@ func (dec *StreamDecrypter) Decrypt(dst, src []byte) {
 }
 
 var cipherInfoMap = map[string]*cipherInfo{
-	"aes256cfb": &cipherInfo{aes.BlockSize, 32, aes.NewCipher, cipher.NewCFBEncrypter, cipher.NewCFBDecrypter},
+	"aes256cfb": &cipherInfo{aes.BlockSize, 32, nil, aes.NewCipher, cipher.NewCFBEncrypter, cipher.NewCFBDecrypter},
 }
 
-func GetCipherInfo(cipherName string) (info *cipherInfo, err error) {
+func GetCipherInfo(cipherName, password string) (info *cipherInfo, err error) {
 	info, ok := cipherInfoMap[cipherName]
 	if !ok {
 		err = fmt.Errorf("no support cipher %s", cipherName)
 	}
+	info.key = evpBytesToKey(password, info.keyLen)
 	return
 }
 
-func EVPBytesToKey(password string, keyLen int) (key []byte) {
+func evpBytesToKey(password string, keyLen int) (key []byte) {
 	const md5Len = 16
 
 	cnt := (keyLen-1)/md5Len + 1
@@ -78,8 +80,8 @@ func EVPBytesToKey(password string, keyLen int) (key []byte) {
 	return m[:keyLen]
 }
 
-func NewEncrypter(info *cipherInfo, key, iv []byte) (encrypter Encrypter, err error) {
-	block, err := info.newCipher(key)
+func NewEncrypter(info *cipherInfo, iv []byte) (encrypter Encrypter, err error) {
+	block, err := info.newCipher(info.key)
 	if err != nil {
 		return
 	}
@@ -92,8 +94,8 @@ func NewEncrypter(info *cipherInfo, key, iv []byte) (encrypter Encrypter, err er
 	return
 }
 
-func NewDecrypter(info *cipherInfo, key, iv []byte) (decrypter Decrypter, err error) {
-	block, err := info.newCipher(key)
+func NewDecrypter(info *cipherInfo, iv []byte) (decrypter Decrypter, err error) {
+	block, err := info.newCipher(info.key)
 	if err != nil {
 		return
 	}

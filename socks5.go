@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net"
 )
 
@@ -18,7 +17,6 @@ type Socks5 struct{}
 func (s *Socks5) Auth(conn net.Conn) (err error) {
 	buf := make([]byte, 257)
 	n, e := conn.Read(buf)
-	log.Printf("read socks5 auth request. (read: %v, err: %v)\n", buf[:n], e)
 	if n < 3 || buf[0] != 0x05 || buf[1] < 1 {
 		err = fmt.Errorf("invalid socks5 auth request (req: %v, err: %v)", buf[:n], e)
 		return

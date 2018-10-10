@@ -9,15 +9,12 @@ import (
 
 type SSocks struct{}
 
-func (ss *SSocks) NewDConn(conn net.Conn, password string, info *cipherInfo) (dConn *DConn, err error) {
-	buf := make([]byte, info.ivLen)
-	n, err := conn.Read(buf)
-	if n != info.ivLen || err != nil {
-		err = fmt.Errorf("read iv error (read: %v, err: %v)", buf[:n], err)
+func (ss *SSocks) NewDConn(conn net.Conn, info *cipherInfo) (dConn *DConn, err error) {
+	iv, err := ss.readIV(conn, info)
+	if err != nil {
 		return
 	}
-	key, iv := EVPBytesToKey(password, info.keyLen), buf[:n]
-	decrypter, err := NewDecrypter(info, key, iv)
+	decrypter, err := NewDecrypter(info, iv)
 	if err != nil {
 		return
 	}
@@ -25,19 +22,12 @@ func (ss *SSocks) NewDConn(conn net.Conn, password string, info *cipherInfo) (dC
 	return
 }
 
-func (ss *SSocks) NewEConn(conn net.Conn, password string, info *cipherInfo) (eConn *EConn, err error) {
-	buf := make([]byte, info.ivLen)
-	_, err = io.ReadFull(rand.Reader, buf)
+func (ss *SSocks) NewEConn(conn net.Conn, info *cipherInfo) (eConn *EConn, err error) {
+	iv, err := ss.writeIV(conn, info)
 	if err != nil {
 		return
 	}
-	n, err := conn.Write(buf)
-	if n != info.ivLen || err != nil {
-		err = fmt.Errorf("write iv error (write: %v, err: %v)", buf[:n], err)
-		return
-	}
-	key, iv := EVPBytesToKey(password, info.keyLen), buf[:n]
-	encrypter, err := NewEncrypter(info, key, iv)
+	encrypter, err := NewEncrypter(info, iv)
 	if err != nil {
 		return
 	}
@@ -55,5 +45,31 @@ func (ss *SSocks) Connect(conn net.Conn, dialer Dialer) (dstConn net.Conn, err e
 		return
 	}
 	dstConn, err = dialer.Dial(addr)
+	return
+}
+
+func (ss *SSocks) readIV(conn net.Conn, info *cipherInfo) (iv []byte, err error) {
+	buf := make([]byte, info.ivLen)
+	n, err := conn.Read(buf)
+	if n != info.ivLen || err != nil {
+		err = fmt.Errorf("read iv error (read: %v, err: %v)", buf[:n], err)
+		return
+	}
+	iv = buf[:n]
+	return
+}
+
+func (ss *SSocks) writeIV(conn net.Conn, info *cipherInfo) (iv []byte, err error) {
+	buf := make([]byte, info.ivLen)
+	_, err = io.ReadFull(rand.Reader, buf)
+	if err != nil {
+		return
+	}
+	n, err := conn.Write(buf)
+	if n != info.ivLen || err != nil {
+		err = fmt.Errorf("write iv error (write: %v, err: %v)", buf[:n], err)
+		return
+	}
+	iv = buf[:n]
 	return
 }

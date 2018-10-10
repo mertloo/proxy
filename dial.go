@@ -14,10 +14,9 @@ func (d *TCPDialer) Dial(addr string) (conn net.Conn, err error) {
 }
 
 type SSocksDialer struct {
-	Server   string
-	Password string
-	Cipher   *cipherInfo
-	Timeout  time.Duration
+	Server  string
+	Cipher  *cipherInfo
+	Timeout time.Duration
 }
 
 func (d *SSocksDialer) Dial(addr string) (conn net.Conn, err error) {
@@ -32,7 +31,7 @@ func (d *SSocksDialer) Dial(addr string) (conn net.Conn, err error) {
 		}
 	}()
 	var ssocks SSocks
-	eConn, err := ssocks.NewEConn(conn, d.Password, d.Cipher)
+	eConn, err := ssocks.NewEConn(conn, d.Cipher)
 	if err != nil {
 		return
 	}
@@ -41,7 +40,7 @@ func (d *SSocksDialer) Dial(addr string) (conn net.Conn, err error) {
 	if err != nil {
 		return
 	}
-	dConn, err := ssocks.NewDConn(conn, d.Password, d.Cipher)
+	dConn, err := ssocks.NewDConn(conn, d.Cipher)
 	if err != nil {
 		return
 	}
