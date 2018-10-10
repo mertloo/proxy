@@ -6,20 +6,26 @@ import (
 	"strconv"
 )
 
+const (
+	IPv4 = 0x01
+	FQDN = 0x03
+)
+
 func ReadAddr(conn net.Conn) (addr string, err error) {
 	buf := make([]byte, 259)
-	n, e := conn.Read(buf[:2])
-	if n != 2 || buf[0] != 0x03 || e != nil {
-		err = fmt.Errorf("read addr head error (read: %v, err: %v)", buf[:n], e)
+	n, e := conn.Read(buf)
+	if buf[0] == IPv4 && n == 7 {
+		port := uint16(buf[n-2])<<8 | uint16(buf[n-1])
+		addr = fmt.Sprintf("%s:%d", net.IPv4(buf[1], buf[2], buf[3], buf[4]), port)
 		return
 	}
-	hLen := int(buf[1])
-	n, e = conn.Read(buf[:hLen+2])
-	if n != hLen+2 || e != nil {
-		err = fmt.Errorf("read addr error (read: %v, err: %v)", buf[:n], e)
+	if buf[0] == FQDN && n == int(buf[1])+4 {
+		port := uint16(buf[n-2])<<8 | uint16(buf[n-1])
+		host := string(buf[2 : 2+int(buf[1])])
+		addr = fmt.Sprintf("%s:%d", host, port)
 		return
 	}
-	addr = fmt.Sprintf("%s:%d", buf[:hLen], uint16(buf[hLen])<<8|uint16(buf[hLen+1]))
+	err = fmt.Errorf("read address error (buf: %v, err: %v)", buf[:n], e)
 	return
 }
 
