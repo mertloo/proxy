@@ -1,67 +1,120 @@
-package main
+package socks5
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 )
 
 var (
-	socks5NoAuthResp  = []byte{0x05, 0x00}
-	socks5ConnectReq  = []byte{0x05, 0x01, 0x00}
-	socks5ConnectResp = []byte{0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x10, 0x10}
+	NoAuthResp     = []byte{0x05, 0x00}
+	CmdConnect     = []byte{0x05, 0x01, 0x00}
+	CmdConnectResp = []byte{0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x10, 0x10}
+	ErrVerion      = errors.New("socks5 version error")
+	ErrMethod      = errors.New("socks5 method error")
+	ErrConnect     = errors.New("socks5 connect error")
 )
 
-type Socks5 struct{}
+type socks5Conn struct {
+	net.Conn
+	brw *bufio.ReaderWriter
 
-func (s *Socks5) Auth(conn net.Conn) (err error) {
-	buf := make([]byte, 257)
-	n, e := conn.Read(buf)
-	if n < 3 || buf[0] != 0x05 || buf[1] < 1 {
-		err = fmt.Errorf("invalid socks5 auth request (req: %v, err: %v)", buf[:n], e)
-		return
-	}
+	dstAddr string
+	dst     net.Conn
+	dstBrw  *bufio.ReaderWriter
 
-	hasNoAuth := false
-	for i, nmeth := 0, int(buf[1]); i < nmeth; i++ {
-		if buf[2+i] == 0x00 {
-			hasNoAuth = true
-			break
-		}
-	}
-	if !hasNoAuth {
-		err = fmt.Errorf("no NoAuth method in socks5 auth request")
-		return
-	}
-
-	n, e = conn.Write(socks5NoAuthResp)
-	if n != len(socks5NoAuthResp) || e != nil {
-		err = fmt.Errorf("write socks5 noauth error (write: %d, err: %v)", n, e)
-	}
-	return
+	server *Server
+	buf    [256]byte
 }
 
-func (s *Socks5) Connect(conn net.Conn, dialer Dialer) (dstConn net.Conn, err error) {
-	buf := make([]byte, 3)
-	n, e := conn.Read(buf[:3])
-	if n != 3 || !bytes.Equal(buf[:3], socks5ConnectReq) {
-		err = fmt.Errorf("read socks5 connect cmd error (read: %v, err: %v)", buf[:n], e)
+func newSocks5Conn(rwc net.Conn, srv *Server) *socks5Conn {
+	return &socks5Conn{
+		Conn:   rwc,
+		server: srv,
+		brw: bufio.NewReaderWriter(
+			bufio.NewReader(rwc),
+			bufio.NewWriter(rwc),
+		),
+	}
+}
+
+func (sc *socks5Conn) serve() {
+	defer s.close()
+	fmt.Println("AUTH")
+	if err := s.auth(); err != nil {
+		fmt.Println("AUTH ERR", err)
 		return
 	}
-	defer func() {
-		if err != nil {
+	fmt.Println("CONN")
+	if err := s.connect(); err != nil {
+		fmt.Println("CONN ERR", err)
+		return
+	}
+	fmt.Println("PROXY")
+	err := Pipe(s.dst, s.src)
+	fmt.Println("PROXY ERR", err)
+}
+
+func (sc *socks5Conn) close() {
+	if s.dst != nil {
+		s.dst.Close()
+	}
+	s.src.Close()
+}
+
+func (sc *socks5Conn) auth() (err error) {
+	_, err = io.ReadFull(s.src, s.buf[:2])
+	if err != nil {
+		return err
+	}
+	ver, nmeth := s.buf[0], int(s.buf[1])
+	if ver != 0x05 {
+		return ErrVerion
+	}
+	_, err = io.ReadFull(s.src, s.buf[:nmeth])
+	if err != nil {
+		return err
+	}
+	for i := 0; i < nmeth; i++ {
+		if s.buf[i] == 0x00 {
+			_, err = s.src.Write(NoAuthResp)
+			if err == nil {
+				err = s.src.Flush()
+			}
 			return
 		}
-		n, e = conn.Write(socks5ConnectResp)
-		if n != len(socks5ConnectResp) || e != nil {
-			err = fmt.Errorf("write socks5 connect cmd error (write: %v, err: %v)", buf[:n], e)
-			return
-		}
-	}()
-	addr, err := ReadAddr(conn)
+	}
+	return ErrMethod
+}
+
+func (sc *socks5Conn) connect() (err error) {
+	fmt.Println("READ CONN CMD")
+	_, err = io.ReadFull(s.src, s.buf[:3])
+	if err != nil {
+		return err
+	}
+	fmt.Println("CHECK CONN CMD")
+	if !bytes.Equal(s.buf[:3], CmdConnect) {
+		return ErrConnect
+	}
+	fmt.Println("READ ADDR")
+	s.dstAddr, err = ReadAddr(s.src)
 	if err != nil {
 		return
 	}
-	dstConn, err = dialer.Dial(addr)
-	return
+	fmt.Println("DIAL TGT", s.dstAddr)
+	dst, err := s.dialer.Dial("tcp", s.dstAddr)
+	if err != nil {
+		return
+	}
+	s.dst = newBufConn(dst)
+	_, err = s.src.Write(CmdConnectResp)
+	fmt.Println("RESP CONN CMD", CmdConnectResp)
+	if err == nil {
+		err = s.src.Flush()
+	}
+	return err
 }

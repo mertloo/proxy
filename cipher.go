@@ -1,60 +1,41 @@
-package main
+package ssocks
 
 import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5"
-	"fmt"
+	"errors"
 )
 
-type newCipherFunc func(key []byte) (block cipher.Block, err error)
-type newStreamFunc func(block cipher.Block, iv []byte) (stream cipher.Stream)
+var ErrNotSupportMeth = errors.New("not support cipher method")
 
 type cipherInfo struct {
 	ivLen        int
 	keyLen       int
 	key          []byte
-	newCipher    newCipherFunc
-	newEncStream newStreamFunc
-	newDecStream newStreamFunc
-}
-
-type Encrypter interface {
-	Encrypt(dst, src []byte)
-}
-
-type Decrypter interface {
-	Decrypt(dst, src []byte)
-}
-
-type StreamEncrypter struct {
-	cipher.Stream
-}
-
-func (enc *StreamEncrypter) Encrypt(dst, src []byte) {
-	enc.XORKeyStream(dst, src)
-	return
-}
-
-type StreamDecrypter struct {
-	cipher.Stream
-}
-
-func (dec *StreamDecrypter) Decrypt(dst, src []byte) {
-	dec.XORKeyStream(dst, src)
-	return
+	newCipher    func(key []byte) (block cipher.Block, err error)
+	newEncStream func(block cipher.Block, iv []byte) (stream cipher.Stream)
+	newDecStream func(block cipher.Block, iv []byte) (stream cipher.Stream)
 }
 
 var cipherInfoMap = map[string]*cipherInfo{
-	"aes256cfb": &cipherInfo{aes.BlockSize, 32, nil, aes.NewCipher, cipher.NewCFBEncrypter, cipher.NewCFBDecrypter},
+	"aes256cfb": &cipherInfo{
+		ivLen:        aes.BlockSize,
+		keyLen:       32,
+		key:          nil,
+		newCipher:    aes.NewCipher,
+		newEncStream: cipher.NewCFBEncrypter,
+		newDecStream: cipher.NewCFBDecrypter,
+	},
 }
 
-func GetCipherInfo(cipherName, password string) (info *cipherInfo, err error) {
-	info, ok := cipherInfoMap[cipherName]
+func getCipherInfo(method, password string) (cinfo *cipherInfo, err error) {
+	cinfo, ok := cipherInfoMap[method]
 	if !ok {
-		err = fmt.Errorf("no support cipher %s", cipherName)
+		err = ErrNotSupportMeth
+		return
 	}
-	info.key = evpBytesToKey(password, info.keyLen)
+	cinfo.key = evpBytesToKey(password, cinfo.keyLen)
 	return
 }
 
@@ -66,8 +47,6 @@ func evpBytesToKey(password string, keyLen int) (key []byte) {
 	s := md5.Sum([]byte(password))
 	copy(m, s[:])
 
-	// Repeatedly call md5 until bytes generated is enough.
-	// Each call to md5 uses data: prev md5 sum + password.
 	d := make([]byte, md5Len+len(password))
 	start := 0
 	for i := 1; i < cnt; i++ {
@@ -80,6 +59,7 @@ func evpBytesToKey(password string, keyLen int) (key []byte) {
 	return m[:keyLen]
 }
 
+/*
 func NewEncrypter(info *cipherInfo, iv []byte) (encrypter Encrypter, err error) {
 	block, err := info.newCipher(info.key)
 	if err != nil {
@@ -107,3 +87,4 @@ func NewDecrypter(info *cipherInfo, iv []byte) (decrypter Decrypter, err error) 
 	decrypter = &StreamDecrypter{stream}
 	return
 }
+*/

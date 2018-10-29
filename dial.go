@@ -5,45 +5,41 @@ import (
 	"time"
 )
 
-type TCPDialer struct {
-	Timeout time.Duration
-}
-
-func (d *TCPDialer) Dial(addr string) (conn net.Conn, err error) {
-	return net.DialTimeout("tcp", addr, d.Timeout)
+type Dialer interface {
+	Dial(network, addr string) (conn net.Conn, err error)
 }
 
 type SSocksDialer struct {
 	Server  string
-	Cipher  *cipherInfo
 	Timeout time.Duration
+
+	Method   string
+	Password string
+	cinfo    *cipherInfo
+	ready    bool
 }
 
-func (d *SSocksDialer) Dial(addr string) (conn net.Conn, err error) {
-	conn, err = net.DialTimeout("tcp", d.Server, d.Timeout)
-	if err != nil {
-		return
-	}
-	defer func() {
+func (ssd *SSocksDialer) Dial(network, addr string) (net.Conn, error) {
+	// TBD: set default
+	if !ssd.ready {
+		ssd.cinfo, err = getCipherInfo(srv.Method, srv.Password)
 		if err != nil {
-			conn.Close()
-			return
+			return nil, err
 		}
-	}()
-	var ssocks SSocks
-	eConn, err := ssocks.NewEConn(conn, d.Cipher)
-	if err != nil {
-		return
+		ssd.ready = true
 	}
-	conn = eConn
-	err = WriteAddr(conn, addr)
+	rwc, err := net.DialTimeout(network, ssd.Server, ssd.Timeout)
 	if err != nil {
-		return
+		return nil, err
 	}
-	dConn, err := ssocks.NewDConn(conn, d.Cipher)
+	// TBD: conn with srv/cln cipher
+	ssc := newSSocksConn(rwc, nil)
+	if err = WriteAddr(ssc, addr); err == nil {
+		err = ssc.Flush()
+	}
 	if err != nil {
-		return
+		ssc.Close()
+		ssc = nil
 	}
-	conn = dConn
-	return
+	return ssc, err
 }

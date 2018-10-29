@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"fmt"
@@ -12,6 +12,7 @@ const (
 )
 
 func ReadAddr(conn net.Conn) (addr string, err error) {
+	net.Addr
 	buf := make([]byte, 259)
 	n, e := conn.Read(buf)
 	if buf[0] == IPv4 && n == 7 {
@@ -48,3 +49,5 @@ func WriteAddr(conn net.Conn, addr string) (err error) {
 	_, err = conn.Write(buf[:4+hLen])
 	return
 }
+
+// TBD: AddrFromString; AddrType

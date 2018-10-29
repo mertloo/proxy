@@ -1,75 +1,101 @@
-package main
+package ssocks
 
 import (
+	"bufio"
 	"crypto/rand"
 	"fmt"
 	"io"
 	"net"
 )
 
-type SSocks struct{}
+type ssocksConn struct {
+	net.Conn
+	brw *bufio.ReaderWriter
+	enc encrypter
+	dec decrypter
 
-func (ss *SSocks) NewDConn(conn net.Conn, info *cipherInfo) (dConn *DConn, err error) {
-	iv, err := ss.readIV(conn, info)
-	if err != nil {
-		return
+	dstAddr string
+	dst     net.Conn
+	dstBrw  *bufio.ReaderWriter
+
+	server *Server
+	buf    [256]byte
+}
+
+func newSSocksConn(rwc net.Conn, srv *Server) *ssocksConn {
+	return &ssocksConn{
+		Conn:   rwc,
+		server: srv,
+		brw: bufio.NewReaderWriter(
+			bufio.NewReader(rwc),
+			bufio.NewWriter(rwc),
+		),
 	}
-	decrypter, err := NewDecrypter(info, iv)
-	if err != nil {
-		return
+}
+
+func (ssc *ssocksConn) Read(buf []byte) (n int, err error) {
+	if c.dec == nil {
+		cinfo = c.server.cinfo
+		n, _ := io.ReadFull(c.brw, c.in)
+		if n != cinfo.ivLen {
+			return 0, ErrReadIV
+		}
+		c.dec = cinfo.newDec()
 	}
-	dConn = &DConn{conn, decrypter}
+	n, err = c.brw.Read(buf)
+	if err == nil {
+		dec.Decrypt(buf[:n], buf[:n])
+	}
 	return
 }
 
-func (ss *SSocks) NewEConn(conn net.Conn, info *cipherInfo) (eConn *EConn, err error) {
-	iv, err := ss.writeIV(conn, info)
-	if err != nil {
-		return
+func (ssc *ssocksConn) Write(buf []byte) (n int, err error) {
+	if c.enc == nil {
+		cinfo = c.server.cinfo
+		n, _ := io.ReadFull(rand.Reader, c.out)
+		if n != cinfo.ivLen {
+			return 0, ErrWriteIV
+		}
+		c.enc = cinfo.newEnc()
 	}
-	encrypter, err := NewEncrypter(info, iv)
-	if err != nil {
-		return
-	}
-	eConn = &EConn{conn, encrypter}
-	return
+	enc.Encrypt(buf, buf)
+	return c.brw.Write(buf)
 }
 
-func (ss *SSocks) Connect(conn net.Conn, dialer Dialer) (dstConn net.Conn, err error) {
-	if _, ok := conn.(*DConn); !ok {
-		err = fmt.Errorf("conn not *DConn")
-		return
-	}
-	addr, err := ReadAddr(conn)
-	if err != nil {
-		return
-	}
-	dstConn, err = dialer.Dial(addr)
-	return
+func (ssc *ssocksConn) Flush() error {
+	return ssc.brw.Flush()
 }
 
-func (ss *SSocks) readIV(conn net.Conn, info *cipherInfo) (iv []byte, err error) {
-	buf := make([]byte, info.ivLen)
-	n, err := conn.Read(buf)
-	if n != info.ivLen || err != nil {
-		err = fmt.Errorf("read iv error (read: %v, err: %v)", buf[:n], err)
-		return
+func (ssc *ssocksConn) Close() {
+	if s.dst != nil {
+		s.dst.Close()
 	}
-	iv = buf[:n]
-	return
+	s.Conn.Close()
 }
 
-func (ss *SSocks) writeIV(conn net.Conn, info *cipherInfo) (iv []byte, err error) {
-	buf := make([]byte, info.ivLen)
-	_, err = io.ReadFull(rand.Reader, buf)
+func (ssc *ssocksConn) serve() {
+	defer s.close()
+	fmt.Println("ADDR")
+	c.dstAddr, err = ReadAddr(c.brw)
 	if err != nil {
+		fmt.Println("ADDR ERR", err)
 		return
 	}
-	n, err := conn.Write(buf)
-	if n != info.ivLen || err != nil {
-		err = fmt.Errorf("write iv error (write: %v, err: %v)", buf[:n], err)
+	fmt.Println("CONN")
+	if err := s.connect(); err != nil {
+		fmt.Println("CONN ERR", err)
 		return
 	}
-	iv = buf[:n]
-	return
+	fmt.Println("PROXY")
+	err := Pipe(c.brw, c.dstBrw)
+	fmt.Println("PROXY ERR", err)
+}
+
+func (ssc *ssocksConn) connect() (err error) {
+	fmt.Println("DIAL TGT", s.dstAddr)
+	dst, err := s.server.Dialer.Dial("tcp", s.dstAddr)
+	if err == nil {
+		s.dst = newBufConn(dst)
+	}
+	return err
 }
