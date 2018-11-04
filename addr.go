@@ -12,21 +12,34 @@ const (
 )
 
 func ReadAddr(conn net.Conn) (addr string, err error) {
-	net.Addr
-	buf := make([]byte, 259)
-	n, e := conn.Read(buf)
-	if buf[0] == IPv4 && n == 7 {
-		port := uint16(buf[n-2])<<8 | uint16(buf[n-1])
-		addr = fmt.Sprintf("%s:%d", net.IPv4(buf[1], buf[2], buf[3], buf[4]), port)
+	var buf [256]byte
+	_, err = conn.Read(buf[:1])
+	if err != nil {
 		return
 	}
-	if buf[0] == FQDN && n == int(buf[1])+4 {
-		port := uint16(buf[n-2])<<8 | uint16(buf[n-1])
-		host := string(buf[2 : 2+int(buf[1])])
-		addr = fmt.Sprintf("%s:%d", host, port)
-		return
+	switch buf[0] {
+	case IPv4:
+		_, err = conn.Read(buf[:6])
+		if err != nil {
+			return
+		}
+		port := uint16(buf[4])<<8 | uint16(buf[5])
+		addr = fmt.Sprintf("%s:%d", net.IPv4(buf[0], buf[1], buf[2], buf[3]), port)
+	case FQDN:
+		_, err = conn.Read(buf[:1])
+		if err != nil {
+			return
+		}
+		alen := int(buf[0])
+		_, err = conn.Read(buf[:alen+2])
+		if err != nil {
+			return
+		}
+		port := uint16(buf[alen])<<8 | uint16(buf[alen+1])
+		addr = fmt.Sprintf("%s:%d", buf[:alen], port)
+	default:
+		err = fmt.Errorf("not support atyp %v", buf[0])
 	}
-	err = fmt.Errorf("read address error (buf: %v, err: %v)", buf[:n], e)
 	return
 }
 
@@ -49,5 +62,3 @@ func WriteAddr(conn net.Conn, addr string) (err error) {
 	_, err = conn.Write(buf[:4+hLen])
 	return
 }
-
-// TBD: AddrFromString; AddrType

@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"fmt"
 	"io"
 	"net"
 )
@@ -11,23 +10,22 @@ type ErrTimeout interface {
 	Timeout() bool
 }
 
-func Pipe(dst, src net.Conn) (err error) {
-	ch := make(chan error)
-	defer close(ch)
-	var eu, ed error
+func Pipe(dst, src net.Conn) (err, rerr error) {
+	ch := make(chan struct{})
 	go func() {
-		_, e := io.Copy(dst, src)
-		ch <- e
+		_, err = io.Copy(dst, src)
+		close(ch)
 	}()
-	_, eu = io.Copy(src, dst)
-	ed = <-ch
-	for _, e := range []error{eu, ed} {
-		if e == nil {
-			continue
+	_, rerr = io.Copy(src, dst)
+	<-ch
+	if err != nil {
+		if _, ok := err.(ErrTimeout); ok {
+			err = nil
 		}
-		if _, ok := e.(ErrTimeout); !ok {
-			err = fmt.Errorf("agent.transport() error. (eu: %v, ed: %v)", eu, ed)
-			break
+	}
+	if rerr != nil {
+		if _, ok := rerr.(ErrTimeout); ok {
+			rerr = nil
 		}
 	}
 	return

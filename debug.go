@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"log"
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func goroutineNum(n int) {
+func GoroNum(n int) {
 	go func() {
 		for _ = range time.Tick(time.Duration(n) * time.Second) {
 			log.Println("#goroutines", runtime.NumGoroutine())
@@ -16,7 +16,7 @@ func goroutineNum(n int) {
 	}()
 }
 
-func pprofRun(addr string) {
+func PProfRun(addr string) {
 	go func() {
 		log.Println(http.ListenAndServe(addr, nil))
 	}()
