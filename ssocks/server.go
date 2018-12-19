@@ -15,8 +15,12 @@ type Server struct {
 }
 
 func (srv *Server) ListenAndServe() {
-	// TBD: err instead panic
-	srv.cinfo = GetCipherInfo(srv.Method, srv.Password)
+	cinfo, err := GetCipherInfo(srv.Method, srv.Password)
+	if err != nil {
+		log.Println("get cipher err", err)
+		return
+	}
+	srv.cinfo = cinfo
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
 		log.Println("listen err", err)

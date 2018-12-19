@@ -10,11 +10,13 @@ import (
 )
 
 func main() {
-	server := flag.String("server", "socks5://127.0.0.1:1080", "server type")
-	dialer := flag.String("dialer", "ssocks://aes256cfb:woshimima@0.0.0.0:8388", "dialer type")
 	debug := flag.Bool("debug", false, "open debug")
 	pprof := flag.String("pprof", "0.0.0.0:6088", "pprof http addr on debug")
 	goro := flag.Int("goro", 5, "goroNum print second interval on debug")
+	dialer := flag.String("dialer", "tcp",
+		"dialer type: tcp or ssocks://<cipher>:<password>@<host>:<port>")
+	server := flag.String("server", "socks5://127.0.0.1:1080",
+		"server type: socks5://<host>:<port> or ssocks://<cipher>:<password>@<host>:<port>")
 	flag.Parse()
 
 	if *debug {
@@ -41,6 +43,9 @@ func main() {
 				Method:   dconf.Method,
 				Password: dconf.Password,
 			}
+		} else if dconf.Proto != "tcp" {
+			log.Printf("invalid dialer type %s\n", sconf.Proto)
+			return
 		}
 		srv.ListenAndServe()
 	case "ssocks":
@@ -51,7 +56,7 @@ func main() {
 		}
 		srv.ListenAndServe()
 	default:
-		log.Println("invalid server type %s", sconf.Proto)
+		log.Printf("invalid server type %s\n", sconf.Proto)
 	}
 	return
 }

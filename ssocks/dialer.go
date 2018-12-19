@@ -15,8 +15,10 @@ type Dialer struct {
 
 func (d *Dialer) Dial(network, addr string) (c net.Conn, err error) {
 	if d.cinfo == nil {
-		// TBD: err instead panic
-		d.cinfo = GetCipherInfo(d.Method, d.Password)
+		d.cinfo, err = GetCipherInfo(d.Method, d.Password)
+		if err != nil {
+			return
+		}
 	}
 	rwc, err := net.Dial(network, d.Server)
 	if err != nil {

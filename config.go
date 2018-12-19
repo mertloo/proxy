@@ -13,6 +13,9 @@ type Config struct {
 }
 
 func ParseConfig(expr string) (*Config, error) {
+	if expr == "tcp" {
+		return &Config{Proto: "tcp"}, nil
+	}
 	parts := strings.SplitN(expr, "://", 2)
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("bad expr %s", expr)

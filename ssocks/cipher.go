@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5"
+	"fmt"
 )
 
 type newCipherFunc func(key []byte) (block cipher.Block, err error)
@@ -29,8 +30,12 @@ var cipherInfoMap = map[string]*cipherInfo{
 	},
 }
 
-func GetCipherInfo(method, password string) (cinfo *cipherInfo) {
+func GetCipherInfo(method, password string) (cinfo *cipherInfo, err error) {
 	cinfo = cipherInfoMap[method]
+	if cinfo == nil {
+		err = fmt.Errorf("not supported cipher: %s", method)
+		return
+	}
 	cinfo.key = evpBytesToKey(password, cinfo.keyLen)
 	return
 }
