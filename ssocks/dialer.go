@@ -2,6 +2,7 @@ package ssocks
 
 import (
 	"net"
+	"time"
 
 	"github.com/mertloo/proxy"
 )
@@ -10,6 +11,7 @@ type Dialer struct {
 	Server   string
 	Method   string
 	Password string
+	Timeout  time.Duration
 	cinfo    *cipherInfo
 }
 
@@ -20,11 +22,12 @@ func (d *Dialer) Dial(network, addr string) (c net.Conn, err error) {
 			return
 		}
 	}
-	rwc, err := net.Dial(network, d.Server)
+	rwc, err := net.DialTimeout(network, d.Server, d.Timeout)
 	if err != nil {
 		return
 	}
-	c = newConn(rwc, d.cinfo)
+	tc := &timeoutConn{Conn: rwc, Timeout: d.Timeout}
+	c = newConn(tc, d.cinfo)
 	if err = proxy.WriteAddr(c, addr); err != nil {
 		c.Close()
 		c = nil

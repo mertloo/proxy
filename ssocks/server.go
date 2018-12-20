@@ -3,6 +3,7 @@ package ssocks
 import (
 	"log"
 	"net"
+	"time"
 
 	"github.com/mertloo/proxy"
 )
@@ -11,6 +12,7 @@ type Server struct {
 	Addr     string
 	Method   string
 	Password string
+	Timeout  time.Duration
 	cinfo    *cipherInfo
 }
 
@@ -38,7 +40,8 @@ func (srv *Server) ListenAndServe() {
 }
 
 func (srv *Server) Handle(rwc net.Conn) {
-	c := newConn(rwc, srv.cinfo)
+	tc := &timeoutConn{Conn: rwc, Timeout: srv.Timeout}
+	c := newConn(tc, srv.cinfo)
 	srcAddr := c.RemoteAddr()
 	log.Printf("%s ssocks addr.\n", srcAddr)
 	dstAddr, err := proxy.ReadAddr(c)
@@ -47,11 +50,12 @@ func (srv *Server) Handle(rwc net.Conn) {
 		return
 	}
 	log.Printf("%s ssocks dial %s.\n", srcAddr, dstAddr)
-	dst, err := net.Dial("tcp", dstAddr)
+	dst, err := net.DialTimeout("tcp", dstAddr, srv.Timeout)
 	if err != nil {
 		log.Printf("%s ssocks dial %s err %s.\n", srcAddr, dstAddr, err)
 		return
 	}
+	dst = &timeoutConn{Conn: dst, Timeout: srv.Timeout}
 	log.Printf("%v -> %v pipe closed.\n", srcAddr, dstAddr)
 	err, rerr := proxy.Pipe(dst, c)
 	if err != nil {

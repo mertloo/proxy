@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"time"
 
 	"github.com/mertloo/proxy"
 	"github.com/mertloo/proxy/socks5"
@@ -13,6 +14,7 @@ func main() {
 	debug := flag.Bool("debug", false, "open debug")
 	pprof := flag.String("pprof", "0.0.0.0:6088", "pprof http addr on debug")
 	goro := flag.Int("goro", 5, "goroNum print second interval on debug")
+	timeoutN := flag.Int("timeout", 2, "timeout in second")
 	dialer := flag.String("dialer", "tcp",
 		"dialer type: tcp or ssocks://<cipher>:<password>@<host>:<port>")
 	server := flag.String("server", "socks5://127.0.0.1:1080",
@@ -24,6 +26,7 @@ func main() {
 		proxy.GoroNum(*goro)
 	}
 
+	timeout := time.Duration(*timeoutN) * time.Second
 	sconf, err := proxy.ParseConfig(*server)
 	if err != nil {
 		log.Println(err)
@@ -36,12 +39,13 @@ func main() {
 			log.Println(err)
 			return
 		}
-		srv := &socks5.Server{Addr: sconf.Addr}
+		srv := &socks5.Server{Addr: sconf.Addr, Timeout: timeout}
 		if dconf.Proto == "ssocks" {
 			srv.Dialer = &ssocks.Dialer{
 				Server:   dconf.Addr,
 				Method:   dconf.Method,
 				Password: dconf.Password,
+				Timeout:  timeout,
 			}
 		} else if dconf.Proto != "tcp" {
 			log.Printf("invalid dialer type %s\n", sconf.Proto)
@@ -53,6 +57,7 @@ func main() {
 			Addr:     sconf.Addr,
 			Method:   sconf.Method,
 			Password: sconf.Password,
+			Timeout:  timeout,
 		}
 		srv.ListenAndServe()
 	default:
