@@ -32,14 +32,14 @@ func (srv *Server) ListenAndServe() {
 	}
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
-		log.Println("listen err", err)
+		log.Println("listen ERROR", err)
 		return
 	}
 	log.Println("listen at:", srv.Addr)
 	for {
 		rwc, err := ln.Accept()
 		if err != nil {
-			log.Println("accept err", err)
+			log.Println("accept ERROR", err)
 			continue
 		}
 		c := srv.newConn(rwc)
@@ -67,13 +67,13 @@ func (c *conn) serve() {
 	log.Printf("%v socks5 auth.\n", srcAddr)
 	err := c.auth()
 	if err != nil {
-		log.Printf("%v socks5 auth err %v.\n", srcAddr, err)
+		log.Printf("%v socks5 auth ERROR %v.\n", srcAddr, err)
 		return
 	}
 	log.Printf("%v socks5 connect.\n", srcAddr)
 	c.dst, err = c.connect()
 	if err != nil {
-		log.Printf("%v socks5 connect err %v.\n", srcAddr, err)
+		log.Printf("%v socks5 connect ERROR %v.\n", srcAddr, err)
 		return
 	}
 	defer c.dst.Close()

@@ -19,20 +19,20 @@ type Server struct {
 func (srv *Server) ListenAndServe() {
 	cinfo, err := GetCipherInfo(srv.Method, srv.Password)
 	if err != nil {
-		log.Println("get cipher err", err)
+		log.Println("get cipher ERROR", err)
 		return
 	}
 	srv.cinfo = cinfo
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
-		log.Println("listen err", err)
+		log.Println("listen ERROR", err)
 		return
 	}
 	log.Println("listen at:", srv.Addr)
 	for {
 		rwc, err := ln.Accept()
 		if err != nil {
-			log.Println("accept err", err)
+			log.Println("accept ERROR", err)
 			continue
 		}
 		go srv.Handle(rwc)
@@ -46,13 +46,13 @@ func (srv *Server) Handle(rwc net.Conn) {
 	log.Printf("%s ssocks addr.\n", srcAddr)
 	dstAddr, err := proxy.ReadAddr(c)
 	if err != nil {
-		log.Printf("%s ssocks read addr err %s.\n", srcAddr, err)
+		log.Printf("%s ssocks read addr ERROR %s.\n", srcAddr, err)
 		return
 	}
 	log.Printf("%s ssocks dial %s.\n", srcAddr, dstAddr)
 	dst, err := net.DialTimeout("tcp", dstAddr, srv.Timeout)
 	if err != nil {
-		log.Printf("%s ssocks dial %s err %s.\n", srcAddr, dstAddr, err)
+		log.Printf("%s ssocks dial %s ERROR %s.\n", srcAddr, dstAddr, err)
 		return
 	}
 	dst = &timeoutConn{Conn: dst, Timeout: srv.Timeout}

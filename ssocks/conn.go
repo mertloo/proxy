@@ -62,8 +62,8 @@ func (c *conn) initEnc() (err error) {
 func (c *conn) initDec() error {
 	iv := c.buf[:c.cinfo.ivLen]
 	n, err := c.Conn.Read(iv)
-	if n != c.cinfo.ivLen {
-		return fmt.Errorf("bad iv(%d) %v", n, iv[:n])
+	if n != c.cinfo.ivLen || err != nil {
+		return fmt.Errorf("bad iv(%d) %v, %v", n, iv[:n], err)
 	}
 	block, err := c.cinfo.newCipher(c.cinfo.key)
 	if err == nil {
