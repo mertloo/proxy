@@ -14,6 +14,7 @@ type cipherInfo struct {
 	ivLen        int
 	keyLen       int
 	key          []byte
+	block        cipher.Block
 	newCipher    newCipherFunc
 	newEncStream newStreamFunc
 	newDecStream newStreamFunc
@@ -37,6 +38,10 @@ func GetCipherInfo(method, password string) (cinfo *cipherInfo, err error) {
 		return
 	}
 	cinfo.key = evpBytesToKey(password, cinfo.keyLen)
+	cinfo.block, err = cinfo.newCipher(cinfo.key)
+	if err != nil {
+		cinfo = nil
+	}
 	return
 }
 

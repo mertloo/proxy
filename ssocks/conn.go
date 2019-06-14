@@ -49,11 +49,7 @@ func (c *conn) initEnc() (err error) {
 	if err != nil {
 		return
 	}
-	block, err := c.cinfo.newCipher(c.cinfo.key)
-	if err != nil {
-		return
-	}
-	c.enc = c.cinfo.newEncStream(block, iv)
+	c.enc = c.cinfo.newEncStream(c.cinfo.block, iv)
 	_, err = c.Conn.Write(iv)
 	return
 }
@@ -64,9 +60,6 @@ func (c *conn) initDec() error {
 	if n != c.cinfo.ivLen || err != nil {
 		return fmt.Errorf("bad iv(%d) %v, %v", n, iv[:n], err)
 	}
-	block, err := c.cinfo.newCipher(c.cinfo.key)
-	if err == nil {
-		c.dec = c.cinfo.newDecStream(block, iv)
-	}
-	return err
+	c.dec = c.cinfo.newDecStream(c.cinfo.block, iv)
+	return nil
 }
