@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 )
 
 type conn struct {
@@ -70,31 +69,4 @@ func (c *conn) initDec() error {
 		c.dec = c.cinfo.newDecStream(block, iv)
 	}
 	return err
-}
-
-type timeoutConn struct {
-	net.Conn
-	Timeout time.Duration
-}
-
-func (tc *timeoutConn) Read(buf []byte) (n int, err error) {
-	if tc.Timeout > 0 {
-		t := time.Now().Add(tc.Timeout)
-		if err = tc.SetReadDeadline(t); err != nil {
-			return
-		}
-	}
-	n, err = tc.Conn.Read(buf)
-	return
-}
-
-func (tc *timeoutConn) Write(buf []byte) (n int, err error) {
-	if tc.Timeout > 0 {
-		t := time.Now().Add(tc.Timeout)
-		if err = tc.SetWriteDeadline(t); err != nil {
-			return
-		}
-	}
-	n, err = tc.Conn.Write(buf)
-	return
 }

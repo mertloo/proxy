@@ -40,7 +40,7 @@ func (srv *Server) ListenAndServe() {
 }
 
 func (srv *Server) Handle(rwc net.Conn) {
-	tc := &timeoutConn{Conn: rwc, Timeout: srv.Timeout}
+	tc := &proxy.TimeoutConn{Conn: rwc, Timeout: srv.Timeout}
 	c := newConn(tc, srv.cinfo)
 	srcAddr := c.RemoteAddr()
 	log.Printf("%s ssocks addr.\n", srcAddr)
@@ -55,7 +55,7 @@ func (srv *Server) Handle(rwc net.Conn) {
 		log.Printf("%s ssocks dial %s ERROR %s.\n", srcAddr, dstAddr, err)
 		return
 	}
-	dst = &timeoutConn{Conn: dst, Timeout: srv.Timeout}
+	dst = &proxy.TimeoutConn{Conn: dst, Timeout: srv.Timeout}
 	log.Printf("%v -> %v pipe closed.\n", srcAddr, dstAddr)
 	err, rerr := proxy.Pipe(dst, c)
 	if err != nil {

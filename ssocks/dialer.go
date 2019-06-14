@@ -26,7 +26,7 @@ func (d *Dialer) Dial(network, addr string) (c net.Conn, err error) {
 	if err != nil {
 		return
 	}
-	tc := &timeoutConn{Conn: rwc, Timeout: d.Timeout}
+	tc := &proxy.TimeoutConn{Conn: rwc, Timeout: d.Timeout}
 	c = newConn(tc, d.cinfo)
 	if err = proxy.WriteAddr(c, addr); err != nil {
 		c.Close()

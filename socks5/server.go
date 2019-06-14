@@ -48,7 +48,7 @@ func (srv *Server) ListenAndServe() {
 }
 
 func (srv *Server) newConn(rwc net.Conn) *conn {
-	tc := &timeoutConn{Conn: rwc, Timeout: srv.Timeout}
+	tc := &proxy.TimeoutConn{Conn: rwc, Timeout: srv.Timeout}
 	return &conn{Conn: tc, Server: srv}
 }
 
@@ -122,7 +122,7 @@ func (c *conn) connect() (dst net.Conn, err error) {
 	dst, err = c.Dial("tcp", c.dstAddr)
 	if err == nil {
 		if _, ok := c.Dialer.(*net.Dialer); ok {
-			dst = &timeoutConn{Conn: dst, Timeout: c.Timeout}
+			dst = &proxy.TimeoutConn{Conn: dst, Timeout: c.Timeout}
 		}
 		_, err = c.Write(CmdConnectResp)
 		if err != nil {
@@ -130,32 +130,5 @@ func (c *conn) connect() (dst net.Conn, err error) {
 			dst = nil
 		}
 	}
-	return
-}
-
-type timeoutConn struct {
-	net.Conn
-	Timeout time.Duration
-}
-
-func (tc *timeoutConn) Read(buf []byte) (n int, err error) {
-	if tc.Timeout > 0 {
-		t := time.Now().Add(tc.Timeout)
-		if err = tc.SetReadDeadline(t); err != nil {
-			return
-		}
-	}
-	n, err = tc.Conn.Read(buf)
-	return
-}
-
-func (tc *timeoutConn) Write(buf []byte) (n int, err error) {
-	if tc.Timeout > 0 {
-		t := time.Now().Add(tc.Timeout)
-		if err = tc.SetWriteDeadline(t); err != nil {
-			return
-		}
-	}
-	n, err = tc.Conn.Write(buf)
 	return
 }
