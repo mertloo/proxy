@@ -17,7 +17,7 @@ type Server struct {
 }
 
 func (srv *Server) ListenAndServe() {
-	cinfo, err := GetCipherInfo(srv.Method, srv.Password)
+	cinfo, err := getCipherInfo(srv.Method, srv.Password)
 	if err != nil {
 		log.Println("get cipher ERROR", err)
 		return

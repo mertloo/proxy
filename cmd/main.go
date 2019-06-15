@@ -41,11 +41,11 @@ func main() {
 		}
 		srv := &socks5.Server{Addr: sconf.Addr, Timeout: timeout}
 		if dconf.Proto == "ssocks" {
-			srv.Dialer = &ssocks.Dialer{
-				Server:   dconf.Addr,
-				Method:   dconf.Method,
-				Password: dconf.Password,
-				Timeout:  timeout,
+			srv.Dialer, err = ssocks.NewDialer(
+				dconf.Addr, dconf.Method, dconf.Password, timeout)
+			if err != nil {
+				log.Println(err)
+				return
 			}
 		} else if dconf.Proto != "tcp" {
 			log.Printf("invalid dialer type %s\n", sconf.Proto)

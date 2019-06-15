@@ -31,7 +31,7 @@ var cipherInfoMap = map[string]*cipherInfo{
 	},
 }
 
-func GetCipherInfo(method, password string) (cinfo *cipherInfo, err error) {
+func getCipherInfo(method, password string) (cinfo *cipherInfo, err error) {
 	cinfo = cipherInfoMap[method]
 	if cinfo == nil {
 		err = fmt.Errorf("not supported cipher: %s", method)
