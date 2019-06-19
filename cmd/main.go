@@ -12,6 +12,7 @@ import (
 
 func main() {
 	debug := flag.Bool("debug", false, "open debug")
+	stats := flag.Bool("stats", false, "open stats")
 	pprof := flag.String("pprof", "0.0.0.0:6088", "pprof http addr on debug")
 	goro := flag.Int("goro", 5, "goroNum print second interval on debug")
 	timeoutN := flag.Int("timeout", 2, "timeout in second")
@@ -50,6 +51,10 @@ func main() {
 		} else if dconf.Proto != "tcp" {
 			log.Printf("invalid dialer type %s\n", sconf.Proto)
 			return
+		}
+		if *stats {
+			srv.Stats = proxy.NewStats()
+			go srv.Stats.DoStats()
 		}
 		srv.ListenAndServe()
 	case "ssocks":

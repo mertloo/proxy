@@ -23,6 +23,7 @@ type Dialer interface {
 type Server struct {
 	Addr    string
 	Timeout time.Duration
+	Stats   *proxy.Stats
 	Dialer
 }
 
@@ -77,6 +78,11 @@ func (c *conn) serve() {
 		return
 	}
 	defer c.dst.Close()
+	if c.Server.Stats != nil {
+		c.dst = &proxy.StatsConn{Conn: c.dst}
+		c.Server.Stats.AddStats(c.dst)
+		defer c.Server.Stats.DelStats(c.dst)
+	}
 	log.Printf("%v -> %v pipe.\n", srcAddr, c.dstAddr)
 	err, rerr := proxy.Pipe(c.dst, c)
 	log.Printf("%v -> %v pipe closed.\n", srcAddr, c.dstAddr)
